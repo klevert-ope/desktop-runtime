@@ -1,5 +1,17 @@
 # Build and validation
 
+## Linux system dependencies
+
+All packages needed to build the Linux binary (wry/tao, webkit2gtk, soup, JavaScriptCore, GTK) are installed by one script so CI and local builds stay in sync. When a new Rust crate needs a system library, add the apt package to **`packaging/linux/install-build-deps.sh`** only; no workflow edits required.
+
+**CI:** The release workflow runs `packaging/linux/install-build-deps.sh` on the Linux job.
+
+**Local (Ubuntu/Debian):**
+```bash
+./packaging/linux/install-build-deps.sh
+```
+Then set `PKG_CONFIG_PATH` if needed (e.g. `export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig`) and run `cargo build --release` from `core/`.
+
 ## Memory and leak validation
 
 - **macOS:** Instruments (Leaks + VM)
