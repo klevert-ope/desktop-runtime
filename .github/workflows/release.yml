@@ -116,6 +116,11 @@ jobs:
         with:
           workspaces: core
 
+      - name: Install missing Perl Pod::Usage module (Windows)
+        if: matrix.os == 'windows'
+        run: C:\Strawberry\perl\bin\cpan.bat -T Pod::Usage
+        shell: cmd
+
       - name: Log tool versions
         shell: bash
         run: |
@@ -255,6 +260,7 @@ jobs:
           mkdir -p AppDir/usr/bin
           cp "target/${{ matrix.target }}/release/desktop-runtime-core" AppDir/usr/bin/
           cp packaging/desktop-runtime.desktop AppDir/
+          cp packaging/icons/react.png AppDir/react.png
           chmod +x AppDir/usr/bin/desktop-runtime-core
           # Download appimagetool (recommended replacement for obsolete AppImageKit)
           curl -fsSL -o appimagetool.AppImage "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
