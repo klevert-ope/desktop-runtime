@@ -180,9 +180,9 @@ jobs:
           Write-Host ">> Packaging Windows MSI for version ${{ steps.version.outputs.version }}"
           $SourceDir = (Resolve-Path "target\x86_64-pc-windows-msvc\release").Path
           $Version = "${{ steps.version.outputs.version }}"
-          $LicenseRtf = (Resolve-Path "core\wix\License.rtf").Path
+          $LicenseRtf = (Resolve-Path "packaging\windows\License.rtf").Path
           New-Item -ItemType Directory -Force -Path target\wix | Out-Null
-          candle.exe -dSourceDir="$SourceDir" -dVersion="$Version" -out target\wix\ core\wix\main.wxs
+          candle.exe -dSourceDir="$SourceDir" -dVersion="$Version" -out target\wix\ packaging\windows\main.wxs
           light.exe -out target\wix\desktop-runtime-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.msi target\wix\main.wixobj -sval -ext WixUIExtension "-dWixUILicenseRtf=$LicenseRtf"
           Write-Host ">> Produced: target\wix\desktop-runtime-$Version-x86_64-pc-windows-msvc.msi"
         working-directory: .
