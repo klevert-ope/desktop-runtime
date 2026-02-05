@@ -158,37 +158,21 @@ jobs:
           fi
           echo ">> Size check passed"
 
-      - name: Install WiX Toolset (with retries)
+      - name: Install WiX Toolset (direct download)
         if: matrix.package_format == 'msi'
         shell: pwsh
         run: |
-          $maxAttempts = 3
-          $attempt = 0
-          while ($attempt -lt $maxAttempts) {
-            Write-Host "Attempt $($attempt + 1) to install WiX via Chocolatey"
-            choco install wix -y --no-progress
-            if ($LASTEXITCODE -eq 0) { break }
-            $attempt++
-            if ($attempt -ge $maxAttempts) {
-              Write-Error "Failed to install WiX after $maxAttempts attempts. Exit code: $LASTEXITCODE"
-              exit $LASTEXITCODE
-            }
-            Start-Sleep -Seconds (15 * $attempt)
-          }
-
-      - name: Add WiX to PATH (Windows)
-        if: matrix.package_format == 'msi'
-        shell: pwsh
-        run: |
-          $wixPath = 'C:\Program Files (x86)\WiX Toolset v3.11\bin'
-          if (-Not (Test-Path $wixPath)) {
-            Write-Host "Wix path not found at $wixPath, checking standard program files..."
-            $candidate = Get-ChildItem 'C:\Program Files (x86)\' -Filter 'WiX*' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($candidate) { $wixPath = Join-Path $candidate.FullName 'bin' }
-          }
-          if (-Not (Test-Path $wixPath)) { Write-Error "WiX bin not found. Please inspect choco logs: C:\ProgramData\chocolatey\logs\chocolatey.log"; exit 1 }
-          Write-Host "Adding $wixPath to PATH"
-          echo $wixPath >> $env:GITHUB_PATH
+          $wixUrl = 'https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip'
+          $outZip = "$env:RUNNER_TEMP\wix311-binaries.zip"
+          $outDir = "$env:RUNNER_TEMP\wix"
+          Write-Host ">> Downloading WiX 3.11.2 binaries from GitHub"
+          Invoke-WebRequest -Uri $wixUrl -OutFile $outZip -UseBasicParsing
+          Expand-Archive -Path $outZip -DestinationPath $outDir -Force
+          $candle = Get-ChildItem -Path $outDir -Filter 'candle.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $candle) { Write-Error "candle.exe not found after extraction"; exit 1 }
+          $wixBin = $candle.DirectoryName
+          Write-Host ">> Adding WiX to PATH: $wixBin"
+          echo $wixBin >> $env:GITHUB_PATH
 
       - name: Package (Windows MSI)
         if: matrix.package_format == 'msi'
@@ -202,18 +186,6 @@ jobs:
           Write-Host ">> Produced: target\wix\desktop-runtime-$Version-x86_64-pc-windows-msvc.msi"
         working-directory: .
         shell: pwsh
-
-      - name: Dump Chocolatey log on failure
-        if: failure() && matrix.package_format == 'msi'
-        shell: pwsh
-        run: |
-          if (Test-Path 'C:\ProgramData\chocolatey\logs\chocolatey.log') {
-            Write-Host "=== Chocolatey log ==="
-            Get-Content 'C:\ProgramData\chocolatey\logs\chocolatey.log' -Tail 200
-            Write-Host "=== End Chocolatey log ==="
-          } else {
-            Write-Host "Chocolatey log not found."
-          }
 
       - name: Package (macOS .app)
         if: matrix.package_format == 'app'
