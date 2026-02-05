@@ -71,6 +71,17 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Install Linux dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.0-dev \
+            libgtk-3-dev \
+            libssl-dev \
+            librsvg2-dev \
+            patchelf
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -112,6 +123,11 @@ jobs:
             echo "ERROR: Binary exceeds size limit of ${{ matrix.size_limit_mb }} MB"
             exit 1
           fi
+
+      - name: Add WiX to PATH (Windows)
+        if: matrix.package_format == 'msi'
+        run: echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" >> $env:GITHUB_PATH
+        shell: pwsh
 
       - name: Package (Windows MSI)
         if: matrix.package_format == 'msi'
