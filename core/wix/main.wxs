@@ -6,7 +6,7 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <WixVariable Id="WixUILicenseRtf" Value="core\wix\License.rtf" />
+    <WixVariable Id="WixUILicenseRtf" Value="core/wix/License.rtf" />
     <UIRef Id="WixUI_InstallDir" />
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
