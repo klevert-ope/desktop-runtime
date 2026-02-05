@@ -71,6 +71,21 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Log build context
+        run: |
+          echo "=============================================="
+          echo "BUILD CONTEXT"
+          echo "=============================================="
+          echo "runner:    ${{ matrix.runner }}"
+          echo "os:        ${{ matrix.os }}"
+          echo "arch:      ${{ matrix.arch }}"
+          echo "target:    ${{ matrix.target }}"
+          echo "version:   ${{ steps.version.outputs.version }}"
+          echo "ref:       ${{ github.ref }}"
+          echo "event:     ${{ github.event_name }}"
+          echo "package:   ${{ matrix.package_format }} (size_limit=${{ matrix.size_limit_mb }} MB)"
+          echo "=============================================="
+
       - name: Install Linux dependencies
         if: matrix.os == 'linux'
         run: bash packaging/linux/install-build-deps.sh
@@ -93,6 +108,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - name: Cache Rust
@@ -100,52 +116,107 @@ jobs:
         with:
           workspaces: core
 
+      - name: Log tool versions
+        run: |
+          echo "--- Tool versions ---"
+          node -v
+          npm -v
+          rustc --version
+          cargo --version
+          if command -v pkg-config 2>/dev/null; then pkg-config --version; fi
+          echo "--------------------"
+
       - name: Set PKG_CONFIG_PATH
         if: matrix.os == 'linux'
         run: echo "PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
 
       - name: Build release binary
-        run: cargo build --release --manifest-path core/Cargo.toml --target ${{ matrix.target }}
+        run: |
+          echo ">> Building release binary for target ${{ matrix.target }}"
+          cargo build --release --manifest-path core/Cargo.toml --target ${{ matrix.target }}
+          echo ">> Build finished successfully"
 
       - name: Check binary size
         id: size
         shell: bash
         run: |
           BINARY="target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
+          echo ">> Binary path: $BINARY"
+          if [ ! -f "$BINARY" ]; then
+            echo "ERROR: Binary not found at $BINARY"
+            exit 1
+          fi
           SIZE_BYTES=$(wc -c < "$BINARY" | tr -d ' \n')
           SIZE_MB=$((SIZE_BYTES / 1048576))
           echo "size_mb=$SIZE_MB" >> $GITHUB_OUTPUT
-          echo "Binary size: ${SIZE_MB} MB (limit: ${{ matrix.size_limit_mb }} MB)"
+          echo ">> Binary size: ${SIZE_MB} MB (limit: ${{ matrix.size_limit_mb }} MB)"
           if [ "$SIZE_MB" -gt "${{ matrix.size_limit_mb }}" ]; then
             echo "ERROR: Binary exceeds size limit of ${{ matrix.size_limit_mb }} MB"
             exit 1
           fi
+          echo ">> Size check passed"
 
-      - name: Install WiX Toolset
+      - name: Install WiX Toolset (with retries)
         if: matrix.package_format == 'msi'
-        run: choco install wix -y
         shell: pwsh
+        run: |
+          $maxAttempts = 3
+          $attempt = 0
+          while ($attempt -lt $maxAttempts) {
+            Write-Host "Attempt $($attempt + 1) to install WiX via Chocolatey"
+            choco install wix -y --no-progress
+            if ($LASTEXITCODE -eq 0) { break }
+            $attempt++
+            if ($attempt -ge $maxAttempts) {
+              Write-Error "Failed to install WiX after $maxAttempts attempts. Exit code: $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            Start-Sleep -Seconds (15 * $attempt)
+          }
 
       - name: Add WiX to PATH (Windows)
         if: matrix.package_format == 'msi'
-        run: echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" >> $env:GITHUB_PATH
         shell: pwsh
+        run: |
+          $wixPath = 'C:\Program Files (x86)\WiX Toolset v3.11\bin'
+          if (-Not (Test-Path $wixPath)) {
+            Write-Host "Wix path not found at $wixPath, checking standard program files..."
+            $candidate = Get-ChildItem 'C:\Program Files (x86)\' -Filter 'WiX*' -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($candidate) { $wixPath = Join-Path $candidate.FullName 'bin' }
+          }
+          if (-Not (Test-Path $wixPath)) { Write-Error "WiX bin not found. Please inspect choco logs: C:\ProgramData\chocolatey\logs\chocolatey.log"; exit 1 }
+          Write-Host "Adding $wixPath to PATH"
+          echo $wixPath >> $env:GITHUB_PATH
 
       - name: Package (Windows MSI)
         if: matrix.package_format == 'msi'
         run: |
-          $WIX = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          Write-Host ">> Packaging Windows MSI for version ${{ steps.version.outputs.version }}"
           $SourceDir = (Resolve-Path "target\x86_64-pc-windows-msvc\release").Path
           $Version = "${{ steps.version.outputs.version }}"
           New-Item -ItemType Directory -Force -Path target\wix | Out-Null
-          & $WIX\candle.exe -dSourceDir="$SourceDir" -dVersion="$Version" -out target\wix\ core\wix\main.wxs
-          & $WIX\light.exe -out target\wix\desktop-runtime-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.msi target\wix\main.wixobj -sval -ext WixUIExtension -dWixUILicenseRtf=core\wix\License.rtf
+          candle.exe -dSourceDir="$SourceDir" -dVersion="$Version" -out target\wix\ core\wix\main.wxs
+          light.exe -out target\wix\desktop-runtime-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.msi target\wix\main.wixobj -sval -ext WixUIExtension -dWixUILicenseRtf=core\wix\License.rtf
+          Write-Host ">> Produced: target\wix\desktop-runtime-$Version-x86_64-pc-windows-msvc.msi"
         working-directory: .
         shell: pwsh
+
+      - name: Dump Chocolatey log on failure
+        if: failure() && matrix.package_format == 'msi'
+        shell: pwsh
+        run: |
+          if (Test-Path 'C:\ProgramData\chocolatey\logs\chocolatey.log') {
+            Write-Host "=== Chocolatey log ==="
+            Get-Content 'C:\ProgramData\chocolatey\logs\chocolatey.log' -Tail 200
+            Write-Host "=== End Chocolatey log ==="
+          } else {
+            Write-Host "Chocolatey log not found."
+          }
 
       - name: Package (macOS .app)
         if: matrix.package_format == 'app'
         run: |
+          echo ">> Packaging macOS .app for version ${{ steps.version.outputs.version }} (${{ matrix.arch }})"
           VERSION="${{ steps.version.outputs.version }}"
           ARCH="${{ matrix.arch }}"
           mkdir -p "Desktop Runtime.app/Contents/MacOS"
@@ -173,10 +244,12 @@ jobs:
           pkgbuild --root "Desktop Runtime.app" --identifier io.desktop-runtime.app --install-location /Applications "desktop-runtime.pkg"
           sed "s/VERSION_PLACEHOLDER/$VERSION/g" packaging/macos/distribution.xml > distribution.xml
           productbuild --distribution distribution.xml --resources packaging/macos/resources/ --package-path . "desktop-runtime-$VERSION-$ARCH-apple-darwin.pkg"
+          echo ">> Produced: desktop-runtime-$VERSION-$ARCH-apple-darwin.tar.gz, .pkg"
 
       - name: Package (Linux AppImage)
         if: matrix.package_format == 'appimage'
         run: |
+          echo ">> Packaging Linux AppImage for version ${{ steps.version.outputs.version }}"
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p AppDir/usr/bin
           cp "target/${{ matrix.target }}/release/desktop-runtime-core" AppDir/usr/bin/
@@ -192,6 +265,7 @@ jobs:
           cp packaging/LICENSE.txt linux-installer/
           chmod +x linux-installer/install-desktop-runtime.sh
           tar czf "desktop-runtime-$VERSION-linux-installer.tar.gz" -C linux-installer install-desktop-runtime.sh LICENSE.txt
+          echo ">> Produced: desktop-runtime-$VERSION-x86_64.AppImage, linux-installer.tar.gz"
 
       - name: Upload artifact (Windows MSI)
         if: matrix.package_format == 'msi'
@@ -216,6 +290,40 @@ jobs:
           name: desktop-runtime-${{ steps.version.outputs.version }}-linux-x86_64
           path: desktop-runtime-${{ steps.version.outputs.version }}-x86_64.AppImage
 
+      - name: Build summary (success)
+        if: success()
+        run: |
+          echo "=============================================="
+          echo "BUILD SUCCEEDED"
+          echo "=============================================="
+          echo "version:   ${{ steps.version.outputs.version }}"
+          echo "runner:    ${{ matrix.runner }}"
+          echo "target:    ${{ matrix.target }}"
+          echo "binary:    target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
+          echo "size:      ${{ steps.size.outputs.size_mb }} MB (limit ${{ matrix.size_limit_mb }} MB)"
+          echo "package:   ${{ matrix.package_format }}"
+          echo "=============================================="
+
+      - name: Failure context
+        if: failure()
+        run: |
+          echo "=============================================="
+          echo "BUILD FAILED - CONTEXT FOR DEBUGGING"
+          echo "=============================================="
+          echo "runner:    ${{ matrix.runner }}"
+          echo "os:        ${{ matrix.os }}"
+          echo "target:    ${{ matrix.target }}"
+          echo "version:   ${{ steps.version.outputs.version }}"
+          echo "ref:       ${{ github.ref }}"
+          echo "event:     ${{ github.event_name }}"
+          echo "package:   ${{ matrix.package_format }}"
+          echo ""
+          echo "Key paths (for local repro):"
+          echo "  binary:  target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
+          echo "  core:    core/"
+          echo "  ui:      ui/"
+          echo "=============================================="
+
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
@@ -228,6 +336,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Log release contents
+        run: |
+          echo "=============================================="
+          echo "RELEASE ARTIFACTS"
+          echo "=============================================="
+          find artifacts -type f 2>/dev/null | sort
+          echo "=============================================="
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
