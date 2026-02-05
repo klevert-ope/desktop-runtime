@@ -4,7 +4,7 @@
     Manufacturer="Desktop Runtime" UpgradeCode="B7A1A2D3-E4F5-6789-0ABC-DEF123456789">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
-    <MediaTemplate />
+    <MediaTemplate EmbedCab="yes" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <UIRef Id="WixUI_InstallDir" />
     <Directory Id="TARGETDIR" Name="SourceDir">
@@ -12,6 +12,7 @@
         <Directory Id="INSTALLFOLDER" Name="Desktop Runtime">
           <Component Id="MainExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
             <File Id="DesktopRuntimeExe" Source="$(var.SourceDir)\desktop-runtime-core.exe" KeyPath="yes" />
+            <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
           </Component>
         </Directory>
       </Directory>

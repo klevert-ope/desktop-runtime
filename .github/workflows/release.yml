@@ -15,6 +15,8 @@ env:
 
 jobs:
   build:
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -158,19 +160,33 @@ jobs:
           fi
           echo ">> Size check passed"
 
+      - name: Cache WiX Toolset
+        if: matrix.package_format == 'msi'
+        uses: actions/cache@v4
+        with:
+          path: .cache/wix
+          key: wix-3112-windows-${{ runner.os }}
+
       - name: Install WiX Toolset (direct download)
         if: matrix.package_format == 'msi'
         shell: pwsh
         run: |
-          $wixUrl = 'https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip'
-          $outZip = "$env:RUNNER_TEMP\wix311-binaries.zip"
-          $outDir = "$env:RUNNER_TEMP\wix"
-          Write-Host ">> Downloading WiX 3.11.2 binaries from GitHub"
-          Invoke-WebRequest -Uri $wixUrl -OutFile $outZip -UseBasicParsing
-          Expand-Archive -Path $outZip -DestinationPath $outDir -Force
-          $candle = Get-ChildItem -Path $outDir -Filter 'candle.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $candle) { Write-Error "candle.exe not found after extraction"; exit 1 }
-          $wixBin = $candle.DirectoryName
+          $wixDir = ".cache\wix"
+          $candle = Get-ChildItem -Path $wixDir -Filter 'candle.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($candle) {
+            $wixBin = $candle.DirectoryName
+            Write-Host ">> Using cached WiX at $wixBin"
+          } else {
+            $wixUrl = 'https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip'
+            $outZip = "$env:RUNNER_TEMP\wix311-binaries.zip"
+            New-Item -ItemType Directory -Force -Path $wixDir | Out-Null
+            Write-Host ">> Downloading WiX 3.11.2 binaries from GitHub"
+            Invoke-WebRequest -Uri $wixUrl -OutFile $outZip -UseBasicParsing
+            Expand-Archive -Path $outZip -DestinationPath $wixDir -Force
+            $candle = Get-ChildItem -Path $wixDir -Filter 'candle.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $candle) { Write-Error "candle.exe not found after extraction"; exit 1 }
+            $wixBin = $candle.DirectoryName
+          }
           Write-Host ">> Adding WiX to PATH: $wixBin"
           echo $wixBin >> $env:GITHUB_PATH
 
@@ -221,20 +237,29 @@ jobs:
           productbuild --distribution distribution.xml --resources packaging/macos/resources/ --package-path . "desktop-runtime-$VERSION-$ARCH-apple-darwin.pkg"
           echo ">> Produced: desktop-runtime-$VERSION-$ARCH-apple-darwin.tar.gz, .pkg"
 
+      - name: Cache appimagetool
+        if: matrix.package_format == 'appimage'
+        uses: actions/cache@v4
+        with:
+          path: .cache/appimagetool
+          key: appimagetool-1.9.1-linux
+
       - name: Package (Linux AppImage)
         if: matrix.package_format == 'appimage'
         run: |
           echo ">> Packaging Linux AppImage for version ${{ steps.version.outputs.version }}"
           VERSION="${{ steps.version.outputs.version }}"
-          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/bin .cache/appimagetool
           cp "target/${{ matrix.target }}/release/desktop-runtime-core" AppDir/usr/bin/
           cp packaging/desktop-runtime.desktop AppDir/
           cp packaging/icons/react.png AppDir/react.png
           chmod +x AppDir/usr/bin/desktop-runtime-core
-          # Download appimagetool (recommended replacement for obsolete AppImageKit)
-          curl -fsSL -o appimagetool.AppImage "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
-          chmod +x appimagetool.AppImage
-          ARCH=x86_64 ./appimagetool.AppImage --no-appstream AppDir "desktop-runtime-$VERSION-x86_64.AppImage"
+          APPIMAGETOOL=".cache/appimagetool/appimagetool-x86_64.AppImage"
+          if [ ! -f "$APPIMAGETOOL" ]; then
+            curl -fsSL -o "$APPIMAGETOOL" "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
+            chmod +x "$APPIMAGETOOL"
+          fi
+          ARCH=x86_64 "$APPIMAGETOOL" --no-appstream AppDir "desktop-runtime-$VERSION-x86_64.AppImage"
           # Bundle installer script with license for guided install flow
           mkdir -p linux-installer
           cp packaging/linux/install-desktop-runtime.sh linux-installer/
@@ -264,7 +289,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-runtime-${{ steps.version.outputs.version }}-linux-x86_64
-          path: desktop-runtime-${{ steps.version.outputs.version }}-x86_64.AppImage
+          path: |
+            desktop-runtime-${{ steps.version.outputs.version }}-x86_64.AppImage
+            desktop-runtime-${{ steps.version.outputs.version }}-linux-installer.tar.gz
 
       - name: Build summary (success)
         if: success()
@@ -306,6 +333,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: release-create-${{ github.ref }}
+      cancel-in-progress: false
 
     steps:
       - name: Download all artifacts

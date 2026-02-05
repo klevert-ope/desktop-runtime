@@ -6,6 +6,7 @@ on:
     paths:
       - 'core/**'
       - 'ui/**'
+      - 'packaging/**'
 
 jobs:
   bloat:
@@ -13,6 +14,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: bash packaging/linux/install-build-deps.sh
+
+      - name: Set PKG_CONFIG_PATH
+        run: echo "PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -32,6 +39,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable
           targets: x86_64-unknown-linux-gnu
 
       - name: Cache Rust
