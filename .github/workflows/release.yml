@@ -116,12 +116,8 @@ jobs:
         with:
           workspaces: core
 
-      - name: Install missing Perl Pod::Usage module (Windows)
-        if: matrix.os == 'windows'
-        run: C:\Strawberry\perl\bin\cpan.bat -T Pod::Usage
-        shell: cmd
-
       - name: Log tool versions
+        if: matrix.os != 'windows'
         shell: bash
         run: |
           echo "--- Tool versions ---"
