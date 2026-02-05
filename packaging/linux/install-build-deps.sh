@@ -15,6 +15,7 @@ sudo apt-get install -y \
   libgdk-pixbuf2.0-dev \
   librsvg2-dev \
   libwebkit2gtk-4.0-dev \
+  libwebkit2gtk-4.1-dev \
   libjavascriptcoregtk-4.1-dev \
   libsoup-3.0-dev \
   libsoup2.4-dev \

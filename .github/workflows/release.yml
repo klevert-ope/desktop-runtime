@@ -117,6 +117,7 @@ jobs:
           workspaces: core
 
       - name: Log tool versions
+        shell: bash
         run: |
           echo "--- Tool versions ---"
           node -v
