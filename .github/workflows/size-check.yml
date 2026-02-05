@@ -1,0 +1,59 @@
+name: Size Check
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'core/**'
+      - 'ui/**'
+
+jobs:
+  bloat:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install UI dependencies
+        run: npm ci
+        working-directory: ui
+
+      - name: Build UI
+        run: npm run build
+        working-directory: ui
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install cargo-bloat
+        run: cargo install cargo-bloat
+
+      - name: Build release
+        run: cargo build --release --manifest-path core/Cargo.toml --target x86_64-unknown-linux-gnu
+
+      - name: Cargo bloat report
+        run: cargo bloat --release --manifest-path core/Cargo.toml --target x86_64-unknown-linux-gnu -n 30
+
+      - name: Binary size
+        run: |
+          BINARY="target/x86_64-unknown-linux-gnu/release/desktop-runtime-core"
+          SIZE_BYTES=$(wc -c < "$BINARY" | tr -d ' \n')
+          SIZE_MB=$((SIZE_BYTES / 1048576))
+          echo "### Binary size: ${SIZE_MB} MB (limit: 12 MB)" >> $GITHUB_STEP_SUMMARY
+          if [ "$SIZE_MB" -gt 12 ]; then
+            echo "::warning::Binary exceeds Linux size limit of 12 MB"
+          fi

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <title>Desktop Runtime</title>
+  <license file="License.rtf" />
+  <options customize="never" require-scripts="false" />
+  <choices-outline>
+    <line choice="default">
+      <line choice="io.desktop-runtime.app"/>
+    </line>
+  </choices-outline>
+  <choice id="default" />
+  <choice id="io.desktop-runtime.app" visible="false" title="Desktop Runtime">
+    <pkg-ref id="io.desktop-runtime.app"/>
+  </choice>
+  <pkg-ref id="io.desktop-runtime.app" version="VERSION_PLACEHOLDER" installKBytes="20000">#desktop-runtime.pkg</pkg-ref>
+</installer-gui-script>

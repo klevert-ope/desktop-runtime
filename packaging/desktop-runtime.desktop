@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Desktop Runtime
+Comment=Native desktop runtime with embedded UI
+Exec=usr/bin/desktop-runtime-core
+Icon=react
+Categories=Utility;

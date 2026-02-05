@@ -1,0 +1,36 @@
+[package]
+name = "desktop-runtime-core"
+version = "0.1.0"
+edition = "2021"
+description = "Native desktop runtime (wry + tao), single binary, embedded UI"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/klevert-ope/desktop-runtime.git"
+
+[dependencies]
+tao = "0.34"
+wry = { version = "0.54", default-features = false, features = ["protocol", "drag-drop", "os-webview", "x11"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+include_dir = "0.7"
+image = { version = "0.25", default-features = false, features = ["png"] }
+tokio = { version = "1.41", default-features = false, features = ["rt", "macros", "sync", "time"] }
+http = "1.1"
+rfd = "0.17"
+ureq = { version = "2.11", default-features = false, features = ["json", "tls"] }
+opener = "0.7"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+opt-level = "z"
+debug = false
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[lints.rust]
+unsafe_code = "forbid"

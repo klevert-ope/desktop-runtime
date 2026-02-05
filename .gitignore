@@ -1,0 +1,7 @@
+/target/
+core/target/
+ui/node_modules/
+*.rs.bk
+.DS_Store
+Thumbs.db
+.env

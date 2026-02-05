@@ -1,0 +1,227 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [master]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [master]
+  release:
+    types: [published]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            os: linux
+            arch: x86_64
+            binary_name: desktop-runtime-core
+            ext: ''
+            size_limit_mb: 12
+            package_format: appimage
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            os: windows
+            arch: x86_64
+            binary_name: desktop-runtime-core.exe
+            ext: .exe
+            size_limit_mb: 15
+            package_format: msi
+          - runner: macos-14
+            target: x86_64-apple-darwin
+            os: macos
+            arch: x86_64
+            binary_name: desktop-runtime-core
+            ext: ''
+            size_limit_mb: 20
+            package_format: app
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            os: macos
+            arch: aarch64
+            binary_name: desktop-runtime-core
+            ext: ''
+            size_limit_mb: 20
+            package_format: app
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(grep '^version' core/Cargo.toml | head -1 | cut -d'"' -f2)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install UI dependencies
+        run: npm ci
+        working-directory: ui
+
+      - name: Build UI
+        run: npm run build
+        working-directory: ui
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Build release binary
+        run: cargo build --release --manifest-path core/Cargo.toml --target ${{ matrix.target }}
+
+      - name: Check binary size
+        id: size
+        shell: bash
+        run: |
+          BINARY="target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
+          SIZE_BYTES=$(wc -c < "$BINARY" | tr -d ' \n')
+          SIZE_MB=$((SIZE_BYTES / 1048576))
+          echo "size_mb=$SIZE_MB" >> $GITHUB_OUTPUT
+          echo "Binary size: ${SIZE_MB} MB (limit: ${{ matrix.size_limit_mb }} MB)"
+          if [ "$SIZE_MB" -gt "${{ matrix.size_limit_mb }}" ]; then
+            echo "ERROR: Binary exceeds size limit of ${{ matrix.size_limit_mb }} MB"
+            exit 1
+          fi
+
+      - name: Package (Windows MSI)
+        if: matrix.package_format == 'msi'
+        run: |
+          $WIX = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          $SourceDir = (Resolve-Path "target\x86_64-pc-windows-msvc\release").Path
+          $Version = "${{ steps.version.outputs.version }}"
+          New-Item -ItemType Directory -Force -Path target\wix | Out-Null
+          & $WIX\candle.exe -dSourceDir="$SourceDir" -dVersion="$Version" -out target\wix\ core\wix\main.wxs
+          & $WIX\light.exe -out target\wix\desktop-runtime-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.msi target\wix\main.wixobj -sval -ext WixUIExtension -dWixUILicenseRtf=core\wix\License.rtf
+        working-directory: .
+        shell: pwsh
+
+      - name: Package (macOS .app)
+        if: matrix.package_format == 'app'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCH="${{ matrix.arch }}"
+          mkdir -p "Desktop Runtime.app/Contents/MacOS"
+          cp "target/${{ matrix.target }}/release/desktop-runtime-core" "Desktop Runtime.app/Contents/MacOS/"
+          cat > "Desktop Runtime.app/Contents/Info.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key><string>desktop-runtime-core</string>
+            <key>CFBundleIdentifier</key><string>io.desktop-runtime.app</string>
+            <key>CFBundleName</key><string>Desktop Runtime</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>VERSION_PLACEHOLDER</string>
+            <key>CFBundleVersion</key><string>VERSION_PLACEHOLDER</string>
+            <key>LSMinimumSystemVersion</key><string>10.15</string>
+          </dict>
+          </plist>
+          PLIST
+          sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "Desktop Runtime.app/Contents/Info.plist"
+          rm -f "Desktop Runtime.app/Contents/Info.plist.bak"
+          chmod +x "Desktop Runtime.app/Contents/MacOS/desktop-runtime-core"
+          tar czf "desktop-runtime-$VERSION-$ARCH-apple-darwin.tar.gz" "Desktop Runtime.app"
+          # Build .pkg installer with license agreement
+          pkgbuild --root "Desktop Runtime.app" --identifier io.desktop-runtime.app --install-location /Applications "desktop-runtime.pkg"
+          sed "s/VERSION_PLACEHOLDER/$VERSION/g" packaging/macos/distribution.xml > distribution.xml
+          productbuild --distribution distribution.xml --resources packaging/macos/resources/ --package-path . "desktop-runtime-$VERSION-$ARCH-apple-darwin.pkg"
+
+      - name: Package (Linux AppImage)
+        if: matrix.package_format == 'appimage'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p AppDir/usr/bin
+          cp "target/${{ matrix.target }}/release/desktop-runtime-core" AppDir/usr/bin/
+          cp packaging/desktop-runtime.desktop AppDir/
+          chmod +x AppDir/usr/bin/desktop-runtime-core
+          # Download appimagetool (recommended replacement for obsolete AppImageKit)
+          curl -fsSL -o appimagetool.AppImage "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
+          chmod +x appimagetool.AppImage
+          ARCH=x86_64 ./appimagetool.AppImage --no-appstream AppDir "desktop-runtime-$VERSION-x86_64.AppImage"
+          # Bundle installer script with license for guided install flow
+          mkdir -p linux-installer
+          cp packaging/linux/install-desktop-runtime.sh linux-installer/
+          cp packaging/LICENSE.txt linux-installer/
+          chmod +x linux-installer/install-desktop-runtime.sh
+          tar czf "desktop-runtime-$VERSION-linux-installer.tar.gz" -C linux-installer install-desktop-runtime.sh LICENSE.txt
+
+      - name: Upload artifact (Windows MSI)
+        if: matrix.package_format == 'msi'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runtime-${{ steps.version.outputs.version }}-windows-x86_64
+          path: target/wix/desktop-runtime-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.msi
+
+      - name: Upload artifact (macOS)
+        if: matrix.package_format == 'app'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runtime-${{ steps.version.outputs.version }}-macos-${{ matrix.arch }}
+          path: |
+            desktop-runtime-${{ steps.version.outputs.version }}-${{ matrix.arch }}-apple-darwin.tar.gz
+            desktop-runtime-${{ steps.version.outputs.version }}-${{ matrix.arch }}-apple-darwin.pkg
+
+      - name: Upload artifact (Linux AppImage)
+        if: matrix.package_format == 'appimage'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-runtime-${{ steps.version.outputs.version }}-linux-x86_64
+          path: desktop-runtime-${{ steps.version.outputs.version }}-x86_64.AppImage
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          name: Release ${{ github.event.release.tag_name || github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/**/*.msi
+            artifacts/**/*.tar.gz
+            artifacts/**/*.pkg
+            artifacts/**/*.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
