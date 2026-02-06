@@ -221,6 +221,7 @@ jobs:
             <key>CFBundleIdentifier</key><string>io.desktop-runtime.app</string>
             <key>CFBundleName</key><string>Desktop Runtime</string>
             <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleIconFile</key><string>App</string>
             <key>CFBundleShortVersionString</key><string>VERSION_PLACEHOLDER</string>
             <key>CFBundleVersion</key><string>VERSION_PLACEHOLDER</string>
             <key>LSMinimumSystemVersion</key><string>10.15</string>
@@ -230,8 +231,18 @@ jobs:
           sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "Desktop Runtime.app/Contents/Info.plist"
           rm -f "Desktop Runtime.app/Contents/Info.plist.bak"
           chmod +x "Desktop Runtime.app/Contents/MacOS/desktop-runtime-core"
+          # Generate app icon from packaging icon
+          mkdir -p "Desktop Runtime.app/Contents/Resources" App.icns.iconset
+          for size in 16 32 64 128 256 512; do
+            sips -z $size $size packaging/icons/react.png --out "App.icns.iconset/icon_${size}x${size}.png"
+            sips -z $((size*2)) $((size*2)) packaging/icons/react.png --out "App.icns.iconset/icon_${size}x${size}@2x.png"
+          done
+          sips -z 1024 1024 packaging/icons/react.png --out "App.icns.iconset/icon_512x512@2x.png"
+          iconutil -c icns App.icns.iconset -o "Desktop Runtime.app/Contents/Resources/App.icns"
+          rm -rf App.icns.iconset
           tar czf "desktop-runtime-$VERSION-$ARCH-apple-darwin.tar.gz" "Desktop Runtime.app"
-          # Build .pkg installer with license agreement
+          # Build .pkg installer (background + welcome + license, install destination choice)
+          cp packaging/icons/react.png packaging/macos/resources/background.png
           pkgbuild --root "Desktop Runtime.app" --identifier io.desktop-runtime.app --install-location /Applications "desktop-runtime.pkg"
           sed "s/VERSION_PLACEHOLDER/$VERSION/g" packaging/macos/distribution.xml > distribution.xml
           productbuild --distribution distribution.xml --resources packaging/macos/resources/ --package-path . "desktop-runtime-$VERSION-$ARCH-apple-darwin.pkg"

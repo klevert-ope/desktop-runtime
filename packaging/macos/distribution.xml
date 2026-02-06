@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<installer-gui-script minSpecVersion="1">
+<installer-gui-script minSpecVersion="2">
   <title>Desktop Runtime</title>
-  <license file="License.rtf" />
-  <options customize="never" require-scripts="false" />
+  <license file="License.rtf" mime-type="application/rtf" />
+  <welcome file="welcome.rtf" mime-type="application/rtf" />
+  <background file="background.png" mime-type="image/png" alignment="center" scaling="proportional" />
+  <options customize="allow" require-scripts="false" />
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true" />
   <choices-outline>
     <line choice="default">
       <line choice="io.desktop-runtime.app"/>
     </line>
   </choices-outline>
   <choice id="default" />
-  <choice id="io.desktop-runtime.app" visible="false" title="Desktop Runtime">
+  <choice id="io.desktop-runtime.app"
+    title="Desktop Runtime"
+    description="Native desktop runtime with embedded UI. Installs to Applications or a location you choose."
+    customLocation="/Applications"
+    customLocationAllowAlternateVolumes="true"
+    start_selected="true">
     <pkg-ref id="io.desktop-runtime.app"/>
   </choice>
   <pkg-ref id="io.desktop-runtime.app" version="VERSION_PLACEHOLDER" installKBytes="20000">#desktop-runtime.pkg</pkg-ref>
+  <product id="io.desktop-runtime.app" version="VERSION_PLACEHOLDER" />
 </installer-gui-script>
