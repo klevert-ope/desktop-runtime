@@ -361,19 +361,3 @@ jobs:
           echo "=============================================="
           find artifacts -type f 2>/dev/null | sort
           echo "=============================================="
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
-          name: Desktop Runtime ${{ github.event.release.tag_name || github.ref_name }}
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          files: |
-            artifacts/**/*.msi
-            artifacts/**/*.tar.gz
-            artifacts/**/*.pkg
-            artifacts/**/*.AppImage
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
