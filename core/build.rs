@@ -14,7 +14,7 @@ fn main() {
                 Some(s.trim_end_matches('/').strip_suffix(".git").unwrap_or(s).to_string())
             })
         })
-        .unwrap_or_else(|| "example/desktop-runtime".to_string());
+        .unwrap_or_else(|| "klevert-ope/desktop-runtime".to_string());
     println!("cargo:rustc-env=GITHUB_REPO_FOR_UPDATES={}", repo);
     let ui_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("ui");
     let dist = ui_dir.join("dist");

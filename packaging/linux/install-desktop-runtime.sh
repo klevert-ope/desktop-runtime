@@ -21,14 +21,19 @@ show_license_text() {
   if [ -f "$LICENSE_FILE" ]; then
     cat "$LICENSE_FILE"
   else
-    echo "Desktop Runtime - License Agreement"
+    echo "Desktop Runtime - Dual License"
     echo ""
-    echo "This software is dual-licensed under Apache License 2.0 OR MIT License."
-    echo "You may use this software under either license at your option."
+    echo "This software is licensed under either of the following, at your option:"
     echo ""
-    echo "By installing, you agree to the terms of the chosen license."
-    echo "Full text: https://www.apache.org/licenses/LICENSE-2.0"
-    echo "Full text: https://opensource.org/licenses/MIT"
+    echo "  Apache License, Version 2.0"
+    echo "  Copyright 2025 The Desktop Runtime contributors"
+    echo "  http://www.apache.org/licenses/LICENSE-2.0"
+    echo ""
+    echo "  MIT License"
+    echo "  Copyright 2026 klevert Opee"
+    echo "  https://opensource.org/licenses/MIT"
+    echo ""
+    echo "By installing, you agree to the terms of one of the above licenses."
   fi
 }
 

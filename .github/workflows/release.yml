@@ -366,9 +366,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || github.ref_name }}
-          name: Release ${{ github.event.release.tag_name || github.ref_name }}
+          name: Desktop Runtime ${{ github.event.release.tag_name || github.ref_name }}
+          body_path: CHANGELOG.md
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             artifacts/**/*.msi
             artifacts/**/*.tar.gz

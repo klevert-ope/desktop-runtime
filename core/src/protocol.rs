@@ -29,11 +29,16 @@ fn mime(path: &str) -> &'static str {
 }
 
 /// Serve one request from embedded UI dir. Returns (body, mime_type). Path is URI path (e.g. "/" or "/assets/foo.js"). No filesystem access.
+/// Rejects path traversal (e.g. "..") so only files inside the embedded UI tree are served.
 pub fn serve(ui: &'static Dir, uri_path: &str) -> Option<(Cow<'static, [u8]>, &'static str)> {
     let path = uri_path.trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
     let path = path.trim_end_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
+    // Reject path traversal; include_dir is embedded so ".." has no meaning but reject for safety.
+    if path.contains("..") {
+        return None;
+    }
 
     let file: &File = ui.get_file(path)?;
     let contents = file.contents();

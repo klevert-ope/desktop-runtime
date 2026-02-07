@@ -7,6 +7,8 @@ license = "Apache-2.0 OR MIT"
 repository = "https://github.com/klevert-ope/desktop-runtime.git"
 
 [dependencies]
+log = "0.4"
+env_logger = "0.11"
 tao = "0.34"
 wry = { version = "0.54", default-features = false, features = ["protocol", "drag-drop", "os-webview", "x11"] }
 serde = { version = "1.0", features = ["derive"] }
