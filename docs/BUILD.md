@@ -1,16 +1,20 @@
 # Build and validation
 
+## Build script (core/build.rs)
+
+- **GitHub repo:** Sets `GITHUB_REPO_FOR_UPDATES` for the crate. Override with `DESKTOP_RUNTIME_GITHUB_REPO` (e.g. `owner/repo`); else derived from `CARGO_PKG_REPOSITORY` or default.
+- **UI:** If `ui/dist/index.html` is missing, runs `npm install` then `npm run build` in `ui/`. Non-zero exit or missing `npm` fails the build.
+- **Rerun:** Script reruns when `../ui` sources, `package.json`, lockfile, or `../packaging/icons/react.png` change.
+
 ## Linux system dependencies
 
-All packages needed to build the Linux binary (wry/tao, webkit2gtk, soup, JavaScriptCore, GTK) are installed by one script so CI and local builds stay in sync. When a new Rust crate needs a system library, add the apt package to **`packaging/linux/install-build-deps.sh`** only; no workflow edits required.
+Install WebKit/GTK deps so wry/tao build. CI and local use the same script.
 
-**CI:** The release workflow runs `packaging/linux/install-build-deps.sh` on the Linux job.
-
-**Local (Ubuntu/Debian):**
 ```bash
 ./packaging/linux/install-build-deps.sh
 ```
-Then set `PKG_CONFIG_PATH` if needed (e.g. `export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig`) and run `cargo build --release` from `core/`.
+
+Set `PKG_CONFIG_PATH` if needed, then `cargo build --release` from `core/`.
 
 ## Memory and leak validation
 
@@ -18,19 +22,14 @@ Then set `PKG_CONFIG_PATH` if needed (e.g. `export PKG_CONFIG_PATH=/usr/lib/x86_
 - **Windows:** WPA + heap snapshot
 - **Linux:** Valgrind / heaptrack
 
-**Scenarios:** Open/close app 100×; idle 8 hours; heavy IPC; UI reload if supported.
-
-**Tolerance:** < 1 MB growth over hours.
+Scenarios: open/close 100×; idle 8 h; heavy IPC. Target: < 1 MB growth over hours.
 
 ## Binary size
 
-- Run `cargo bloat --release -n 30` from `core/`.
-- Remove unused crates; replace heavy deps; strip symbols (release profile already has `strip = true`).
+`cargo bloat --release -n 30` from `core/`. Release profile uses `strip = true`.
 
-**Targets:**
-
-| OS      | Size    |
-| ------- | ------- |
+| OS      | Target  |
+|---------|---------|
 | Windows | ≤ 15 MB |
 | macOS   | ≤ 20 MB |
 | Linux   | ≤ 12 MB |
@@ -40,10 +39,7 @@ Then set `PKG_CONFIG_PATH` if needed (e.g. `export PKG_CONFIG_PATH=/usr/lib/x86_
 - **Windows:** MSI, signed.
 - **macOS:** `.app`, hardened runtime, notarized.
 - **Linux:** AppImage.
-- No auto-updater initially.
 
-## Long-term stability
+## Stability
 
-- Dependency lockfile (`Cargo.lock`) committed.
-- Update cadence defined; UI and core versioned independently.
-- Backward-compatible IPC; crash-safe startup; deterministic builds where possible.
+- `Cargo.lock` committed. IPC backward-compatible; crash-safe startup.
