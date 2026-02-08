@@ -323,8 +323,6 @@ fn run_event_loop(
         if let tao::event::Event::MainEventsCleared = event {
             return;
         }
-        if let tao::event::Event::RedrawEventsCleared = event {
-            return;
-        }
+        if let tao::event::Event::RedrawEventsCleared = event {}
     });
 }

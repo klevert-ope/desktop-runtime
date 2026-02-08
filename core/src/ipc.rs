@@ -159,7 +159,7 @@ pub fn semver_compare(a: &str, b: &str) -> i32 {
     let parse = |s: &str| {
         let parts: Vec<u64> = s.split('.').map(|p| p.parse::<u64>().unwrap_or(0)).collect();
         (
-            parts.get(0).copied().unwrap_or(0),
+            parts.first().copied().unwrap_or(0),
             parts.get(1).copied().unwrap_or(0),
             parts.get(2).copied().unwrap_or(0),
         )
