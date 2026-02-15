@@ -14,7 +14,50 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  test:
+    permissions:
+      contents: read
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: bash packaging/linux/install-build-deps.sh
+
+      - name: Set PKG_CONFIG_PATH
+        run: echo "PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install UI dependencies
+        run: npm ci
+        working-directory: ui
+
+      - name: Build UI
+        run: npm run build
+        working-directory: ui
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Run tests
+        run: cargo test --manifest-path core/Cargo.toml
+
   build:
+    needs: test
     permissions:
       contents: read
     strategy:
@@ -349,6 +392,9 @@ jobs:
       cancel-in-progress: false
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -361,3 +407,16 @@ jobs:
           echo "=============================================="
           find artifacts -type f 2>/dev/null | sort
           echo "=============================================="
+
+      - name: Create Release and upload artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          name: Release ${{ github.event.release.tag_name || github.ref_name }}
+          body_path: RELEASE_${{ github.event.release.tag_name || github.ref_name }}.md
+          body: ${{ github.event.release.body }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

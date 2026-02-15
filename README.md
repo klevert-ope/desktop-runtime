@@ -23,7 +23,7 @@ From repo root: `cargo run --manifest-path core/Cargo.toml --release`
 | UI | React + Vite, built to static assets |
 | IPC | Typed commands over `app://` protocol |
 
-UI assets are embedded at compile time (`include_dir`). IPC is a typed command enum; no eval, no dynamic dispatch. Window is shown after first page load (with a short timeout fallback). Right-click context menu (Save/Print) is disabled.
+UI assets are embedded at compile time (`include_dir`). IPC is a typed command enum; no eval, no dynamic dispatch. Blocking commands (file dialogs, updates, OpenUrl) run on a rayon worker pool; backpressure capped at 256 pending responses. Window is shown after first page load (with a short timeout fallback); position and size persist to `config.json` on close. System tray icon with Show/Quit menu. Right-click context menu (Save/Print) is disabled.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/BUILD.md](docs/BUILD.md).
 
@@ -70,4 +70,4 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/BUILD.md](docs/BUILD.
 
 ## License
 
-Apache-2.0 OR MIT. See [LICENSE](LICENSE).
+Apache-2.0 . See [LICENSE](LICENSE).

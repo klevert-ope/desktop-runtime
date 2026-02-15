@@ -1,9 +1,9 @@
 [package]
 name = "desktop-runtime-core"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "Native desktop runtime (wry + tao), single binary, embedded UI"
-license = "Apache-2.0 OR MIT"
+license = "Apache-2.0"
 repository = "https://github.com/klevert-ope/desktop-runtime.git"
 
 [dependencies]
@@ -21,6 +21,8 @@ http = "1.4"
 rfd = "0.17"
 ureq = { version = "2.12", default-features = false, features = ["json", "tls"] }
 opener = "0.7"
+rayon = "1.10"
+tray-icon = "0.20"
 
 [profile.release]
 lto = "fat"

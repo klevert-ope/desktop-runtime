@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.3.0] - 2026-02-16
+
+### Added
+
+- **Tray icon:** System tray with Show and Quit menu items (icon shared with window).
+- **Config persistence:** `config.json` in user data dir stores window bounds, theme, and generic key-value data.
+- **Window bounds persistence:** Position and size saved on close, restored on startup.
+- **ReadConfig / WriteConfig IPC:** UI can read and write arbitrary config keys.
+- **Rayon worker pool:** Blocking IPC commands (file dialogs, update check, OpenUrl) run on a 4-thread pool instead of blocking the main loop.
+
+### Changed
+
+- **Module refactor:** `ipc.rs` split into `ipc/` (mod, updates, tests). New modules: `config`, `event_loop`, `paths`, `storage`, `window`.
+- **Config centralization:** Window dimensions, IPC limits, env vars, embedded UI path moved to `config` module.
+
+---
+
 ## [0.2.0] - 2026-02-08
 
 ### Added
@@ -68,5 +87,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.3.0]: https://github.com/klevert-ope/desktop-runtime/releases/tag/v0.3.0
 [0.2.0]: https://github.com/klevert-ope/desktop-runtime/releases/tag/v0.2.0
 [0.1.0]: https://github.com/klevert-ope/desktop-runtime/releases/tag/v0.1.0
