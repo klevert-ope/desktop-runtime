@@ -20,6 +20,7 @@ sudo apt-get install -y \
   libsoup-3.0-dev \
   libsoup2.4-dev \
   libayatana-appindicator3-dev \
+  libxdo-dev \
   patchelf
 
 echo "Linux build dependencies installed."
