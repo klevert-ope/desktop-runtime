@@ -54,6 +54,11 @@ $OutDir = Join-Path $RepoRoot 'target\wix'
 $OutMsi = Join-Path $OutDir "desktop-runtime-$Version-x86_64-pc-windows-msvc.msi"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
+# Ensure UI extension is in the wix cache (required for -ext WixToolset.UI.wixext)
+Write-Host '>> Adding WixToolset.UI.wixext to wix extension cache'
+& wix extension add WixToolset.UI.wixext
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Write-Host ">> Building MSI for version $Version"
 $wixArgs = @(
   'build',

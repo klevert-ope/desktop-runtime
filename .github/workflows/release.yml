@@ -211,7 +211,9 @@ jobs:
 
       - name: Install WiX 4
         if: matrix.package_format == 'msi'
-        run: dotnet tool install --global wix
+        run: |
+          dotnet tool install --global wix
+          wix extension add WixToolset.UI.wixext
 
       - name: Package (Windows MSI)
         if: matrix.package_format == 'msi'
