@@ -209,11 +209,11 @@ jobs:
           fi
           echo ">> Size check passed"
 
-      - name: Install WiX 4
+      - name: Install WiX
         if: matrix.package_format == 'msi'
         run: |
           dotnet tool install --global wix
-          wix extension add WixToolset.UI.wixext
+          wix extension add WixToolset.UI.wixext/6.0.2
 
       - name: Package (Windows MSI)
         if: matrix.package_format == 'msi'
