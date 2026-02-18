@@ -8,8 +8,7 @@
            Language="1033"
            InstallerVersion="500"
            Compressed="yes"
-           InstallScope="perMachine"
-           InstallPrivileges="elevated">
+           Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <WixVariable Id="WixUILicenseRtf" Value="$(var.LicenseRtfPath)" />
