@@ -21,19 +21,14 @@ show_license_text() {
   if [ -f "$LICENSE_FILE" ]; then
     cat "$LICENSE_FILE"
   else
-    echo "Desktop Runtime - Dual License"
+    echo "Desktop Runtime - Apache License, Version 2.0"
     echo ""
-    echo "This software is licensed under either of the following, at your option:"
+    echo "Copyright 2025 The Desktop Runtime contributors"
     echo ""
-    echo "  Apache License, Version 2.0"
-    echo "  Copyright 2025 The Desktop Runtime contributors"
-    echo "  http://www.apache.org/licenses/LICENSE-2.0"
+    echo "Licensed under the Apache License, Version 2.0."
+    echo "See http://www.apache.org/licenses/LICENSE-2.0"
     echo ""
-    echo "  MIT License"
-    echo "  Copyright 2026 klevert Opee"
-    echo "  https://opensource.org/licenses/MIT"
-    echo ""
-    echo "By installing, you agree to the terms of one of the above licenses."
+    echo "By installing, you agree to the terms of the Apache License 2.0."
   fi
 }
 
@@ -141,7 +136,11 @@ chmod +x "$INSTALL_PATH"
 if prompt_desktop_shortcut; then
   SHORTCUT_DIR="${HOME}/.local/share/applications"
   mkdir -p "$SHORTCUT_DIR"
-  cat > "$SHORTCUT_DIR/desktop-runtime.desktop" << EOF
+  DESKTOP_IN="$(dirname "$0")/desktop-runtime.desktop.in"
+  if [ -f "$DESKTOP_IN" ]; then
+    sed "s|@EXEC@|$INSTALL_PATH|g" "$DESKTOP_IN" > "$SHORTCUT_DIR/desktop-runtime.desktop"
+  else
+    cat > "$SHORTCUT_DIR/desktop-runtime.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=$APP_NAME
@@ -151,6 +150,7 @@ Icon=react
 Categories=Utility;
 Terminal=false
 EOF
+  fi
   if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$SHORTCUT_DIR" 2>/dev/null || true
   fi

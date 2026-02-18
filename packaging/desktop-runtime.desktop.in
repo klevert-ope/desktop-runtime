@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Desktop Runtime
+Comment=Native desktop runtime with embedded UI
+Exec=@EXEC@ %U
+Icon=react
+Categories=Utility;
+Terminal=false

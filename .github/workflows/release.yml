@@ -116,6 +116,12 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Prepare packaging env
+        run: |
+          bash packaging/scripts/write-build-env.sh "${{ steps.version.outputs.version }}"
+          cat packaging/build-env.env >> $GITHUB_ENV
+        shell: bash
+
       - name: Log build context
         run: |
           echo "=============================================="
@@ -203,93 +209,26 @@ jobs:
           fi
           echo ">> Size check passed"
 
-      - name: Cache WiX Toolset
+      - name: Install WiX 4
         if: matrix.package_format == 'msi'
-        uses: actions/cache@v4
-        with:
-          path: .cache/wix
-          key: wix-3112-windows-${{ runner.os }}
-
-      - name: Install WiX Toolset (direct download)
-        if: matrix.package_format == 'msi'
-        shell: pwsh
-        run: |
-          $wixDir = ".cache\wix"
-          $candle = Get-ChildItem -Path $wixDir -Filter 'candle.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($candle) {
-            $wixBin = $candle.DirectoryName
-            Write-Host ">> Using cached WiX at $wixBin"
-          } else {
-            $wixUrl = 'https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip'
-            $outZip = "$env:RUNNER_TEMP\wix311-binaries.zip"
-            New-Item -ItemType Directory -Force -Path $wixDir | Out-Null
-            Write-Host ">> Downloading WiX 3.11.2 binaries from GitHub"
-            Invoke-WebRequest -Uri $wixUrl -OutFile $outZip -UseBasicParsing
-            Expand-Archive -Path $outZip -DestinationPath $wixDir -Force
-            $candle = Get-ChildItem -Path $wixDir -Filter 'candle.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $candle) { Write-Error "candle.exe not found after extraction"; exit 1 }
-            $wixBin = $candle.DirectoryName
-          }
-          Write-Host ">> Adding WiX to PATH: $wixBin"
-          echo $wixBin >> $env:GITHUB_PATH
+        run: dotnet tool install --global wix
 
       - name: Package (Windows MSI)
         if: matrix.package_format == 'msi'
         run: |
-          Write-Host ">> Packaging Windows MSI for version ${{ steps.version.outputs.version }}"
-          $SourceDir = (Resolve-Path "target\x86_64-pc-windows-msvc\release").Path
-          $Version = "${{ steps.version.outputs.version }}"
-          $LicenseRtf = (Resolve-Path "packaging\windows\License.rtf").Path
-          New-Item -ItemType Directory -Force -Path target\wix | Out-Null
-          candle.exe -dSourceDir="$SourceDir" -dVersion="$Version" -out target\wix\ packaging\windows\main.wxs
-          light.exe -out target\wix\desktop-runtime-${{ steps.version.outputs.version }}-x86_64-pc-windows-msvc.msi target\wix\main.wixobj -sval -ext WixUIExtension "-dWixUILicenseRtf=$LicenseRtf"
-          Write-Host ">> Produced: target\wix\desktop-runtime-$Version-x86_64-pc-windows-msvc.msi"
-        working-directory: .
+          $env:SourceDir = (Resolve-Path "target\x86_64-pc-windows-msvc\release").Path
+          $env:Version = "${{ steps.version.outputs.version }}"
+          & ./packaging/windows/build-msi.ps1
+        working-directory: ${{ github.workspace }}
         shell: pwsh
 
       - name: Package (macOS .app)
         if: matrix.package_format == 'app'
-        run: |
-          echo ">> Packaging macOS .app for version ${{ steps.version.outputs.version }} (${{ matrix.arch }})"
-          VERSION="${{ steps.version.outputs.version }}"
-          ARCH="${{ matrix.arch }}"
-          mkdir -p "Desktop Runtime.app/Contents/MacOS"
-          cp "target/${{ matrix.target }}/release/desktop-runtime-core" "Desktop Runtime.app/Contents/MacOS/"
-          cat > "Desktop Runtime.app/Contents/Info.plist" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleExecutable</key><string>desktop-runtime-core</string>
-            <key>CFBundleIdentifier</key><string>io.desktop-runtime.app</string>
-            <key>CFBundleName</key><string>Desktop Runtime</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleIconFile</key><string>App</string>
-            <key>CFBundleShortVersionString</key><string>VERSION_PLACEHOLDER</string>
-            <key>CFBundleVersion</key><string>VERSION_PLACEHOLDER</string>
-            <key>LSMinimumSystemVersion</key><string>10.15</string>
-          </dict>
-          </plist>
-          PLIST
-          sed -i.bak "s/VERSION_PLACEHOLDER/$VERSION/g" "Desktop Runtime.app/Contents/Info.plist"
-          rm -f "Desktop Runtime.app/Contents/Info.plist.bak"
-          chmod +x "Desktop Runtime.app/Contents/MacOS/desktop-runtime-core"
-          # Generate app icon from packaging icon
-          mkdir -p "Desktop Runtime.app/Contents/Resources" App.icns.iconset
-          for size in 16 32 64 128 256 512; do
-            sips -z $size $size packaging/icons/react.png --out "App.icns.iconset/icon_${size}x${size}.png"
-            sips -z $((size*2)) $((size*2)) packaging/icons/react.png --out "App.icns.iconset/icon_${size}x${size}@2x.png"
-          done
-          sips -z 1024 1024 packaging/icons/react.png --out "App.icns.iconset/icon_512x512@2x.png"
-          iconutil -c icns App.icns.iconset -o "Desktop Runtime.app/Contents/Resources/App.icns"
-          rm -rf App.icns.iconset
-          tar czf "desktop-runtime-$VERSION-$ARCH-apple-darwin.tar.gz" "Desktop Runtime.app"
-          # Build .pkg installer (background + welcome + license, install destination choice)
-          cp packaging/icons/react.png packaging/macos/resources/background.png
-          pkgbuild --root "Desktop Runtime.app" --identifier io.desktop-runtime.app --install-location /Applications "desktop-runtime.pkg"
-          sed "s/VERSION_PLACEHOLDER/$VERSION/g" packaging/macos/distribution.xml > distribution.xml
-          productbuild --distribution distribution.xml --resources packaging/macos/resources/ --package-path . "desktop-runtime-$VERSION-$ARCH-apple-darwin.pkg"
-          echo ">> Produced: desktop-runtime-$VERSION-$ARCH-apple-darwin.tar.gz, .pkg"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          TARGET: ${{ matrix.target }}
+        run: chmod +x packaging/macos/build-app-pkg.sh && ./packaging/macos/build-app-pkg.sh
 
       - name: Cache appimagetool
         if: matrix.package_format == 'appimage'
@@ -300,27 +239,10 @@ jobs:
 
       - name: Package (Linux AppImage)
         if: matrix.package_format == 'appimage'
-        run: |
-          echo ">> Packaging Linux AppImage for version ${{ steps.version.outputs.version }}"
-          VERSION="${{ steps.version.outputs.version }}"
-          mkdir -p AppDir/usr/bin .cache/appimagetool
-          cp "target/${{ matrix.target }}/release/desktop-runtime-core" AppDir/usr/bin/
-          cp packaging/desktop-runtime.desktop AppDir/
-          cp packaging/icons/react.png AppDir/react.png
-          chmod +x AppDir/usr/bin/desktop-runtime-core
-          APPIMAGETOOL=".cache/appimagetool/appimagetool-x86_64.AppImage"
-          if [ ! -f "$APPIMAGETOOL" ]; then
-            curl -fsSL -o "$APPIMAGETOOL" "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
-            chmod +x "$APPIMAGETOOL"
-          fi
-          ARCH=x86_64 "$APPIMAGETOOL" --no-appstream AppDir "desktop-runtime-$VERSION-x86_64.AppImage"
-          # Bundle installer script with license for guided install flow
-          mkdir -p linux-installer
-          cp packaging/linux/install-desktop-runtime.sh linux-installer/
-          cp packaging/LICENSE.txt linux-installer/
-          chmod +x linux-installer/install-desktop-runtime.sh
-          tar czf "desktop-runtime-$VERSION-linux-installer.tar.gz" -C linux-installer install-desktop-runtime.sh LICENSE.txt
-          echo ">> Produced: desktop-runtime-$VERSION-x86_64.AppImage, linux-installer.tar.gz"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: chmod +x packaging/linux/build-appimage.sh && ./packaging/linux/build-appimage.sh
 
       - name: Upload artifact (Windows MSI)
         if: matrix.package_format == 'msi'
